@@ -1,0 +1,89 @@
+- hosts: aws-k8s-master
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: "Create token command for worker nodes"
+      shell: "kubeadm token create  --print-join-command"
+      register: join_cmd
+      args:
+        warn: false
+
+- hosts: aws-k8s-nodes
+  become: yes
+  gather_facts: no
+  vars:
+    - services:
+        - "docker"
+        - "kubelet"
+    - software:
+        - "kubelet"
+        - "kubeadm"
+        - "kubectl"
+        - "docker"
+        - "iproute-tc"
+
+  tasks:
+    - name: "Install selinux python library"
+      package:
+        name: "libselinux-python"
+        state: "present"
+
+    - name: "Put SELinux in permissive mode"
+      selinux:
+        policy: targeted
+        state: permissive
+
+    - name: "Copy k8s repo"
+      copy:
+        src: "kubernetes.repo"
+        dest: "/etc/yum.repos.d/"
+
+    - name: "Install software"
+      package:
+        name: "{{ item }}"
+        state: "present"
+      loop: "{{ software }}"
+
+    - name: "Copy docker daemon file"
+      copy:
+        src: "../daemon.json"
+        dest: "/etc/docker/"
+
+    - name: "Copy k8s modules conf file"
+      copy:
+        src: "modules-load.d_k8s.conf"
+        dest: "/etc/modules-load.d/k8s.conf"
+
+    - name: "Copy k8s sysctl conf file"
+      copy:
+        src: "sysctl.d_k8s.conf"
+        dest: "/etc/sysctl.d/k8s.conf"
+
+    - name: "Enable and start services"
+      service:
+        name: "{{ item }}"
+        state: "restarted"
+        enabled: "yes"
+      loop: "{{ services }}"
+
+    - name: "Reload sysctl confs"
+      command: "sysctl --system"
+
+    - name: "Join with master"
+      shell: "{{ hostvars[groups['aws-k8s-master'][0]]['join_cmd']['stdout'] }}"
+      ignore_errors: yes
+
+    - name: "Create terraform env file"
+      file:
+        path: "/etc/profile.d/terraform.sh"
+        state: touch
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: "Add IS_CONFIGURED env var"
+      lineinfile:
+        path: "/etc/profile.d/terraform.sh"
+        insertafter: 'EOF'
+        line: "export IS_CONFIGURED=1"

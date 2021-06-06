@@ -1,0 +1,110 @@
+- hosts: aws-k8s-master
+  become: yes
+  gather_facts: no
+  vars:
+    - services:
+        - "docker"
+        - "kubelet"
+    - software:
+        - "kubelet"
+        - "kubeadm"
+        - "kubectl"
+        - "docker"
+        - "iproute-tc"
+    - network_name: "10.240.0.0/16"
+  
+  tasks:
+    - name: "Install selinux python library"
+      package:
+        name: "libselinux-python"
+        state: "present"
+
+    - name: "Put SELinux in permissive mode"
+      selinux:
+        policy: "targeted"
+        state: "permissive"
+
+    # - name: "Disable SELinux on next reboot"
+    #   selinux:
+    #     state: "disabled"
+
+    - name: "Copy k8s repo"
+      copy:
+        src: "kubernetes.repo"
+        dest: "/etc/yum.repos.d/"
+
+    - name: "Install software"
+      package:
+        name: "{{ item }}"
+        state: "present"
+      loop: "{{ software }}"
+
+    - name: "Copy docker daemon file"
+      copy:
+        src: "../daemon.json"
+        dest: "/etc/docker/"
+
+    - name: "Copy k8s modules conf file"
+      copy:
+        src: "modules-load.d_k8s.conf"
+        dest: "/etc/modules-load.d/k8s.conf"
+
+    - name: "Copy k8s sysctl conf file"
+      copy:
+        src: "sysctl.d_k8s.conf"
+        dest: "/etc/sysctl.d/k8s.conf"
+
+    - name: "Enable and start services"
+      service:
+        name: "{{ item }}"
+        state: "restarted"
+        enabled: "yes"
+      loop: "{{ services }}"
+
+    - name: "Reload sysctl confs"
+      command: "sysctl --system"
+
+    - name: "Init kubeadm"
+      shell: "kubeadm init --control-plane-endpoint={{ hostvars[inventory_hostname]['inventory_hostname'] }}:6443 --pod-network-cidr={{ network_name }} --ignore-preflight-errors=NumCPU --ignore-preflight-errors=Mem"
+      ignore_errors: yes
+      register: init_cmd
+
+    - name: "Init kubeadm block"
+      block:
+        - name: "Configure kubectl - create directory"
+          file:
+            path: "$HOME/.kube"
+            state: "directory"
+            mode: 0755
+
+        - name: "Configure kubectl - copy kubectl config file"
+          shell: "cp -i /etc/kubernetes/admin.conf $HOME/.kube/config"
+          args:
+            warn: false
+        
+        - name: "Configure kubectl - change permissions"
+          shell: "chown $(id -u):$(id -g) $HOME/.kube/config"
+          args:
+            warn: false
+
+        - name: "Download and modify kube-flannel"
+          shell: "curl https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml | sed  's@10.244.0.0/16@{{ network_name }}@' > kube-flannel.yml"
+          args:
+            warn: false
+
+        - name: "Deploy kube-flannel"
+          shell: "kubectl apply -f kube-flannel.yml"
+          args:
+            warn: false
+      
+      when: init_cmd.rc == 0
+
+    - name: "Configure kubectl locally - copy config file to home dir"
+      shell: "cp /etc/kubernetes/admin.conf /home/ec2-user/config; sudo chown ec2-user config"
+      args:
+        warn: false
+
+    - name: "Configure kubectl locally - copy config file to local system"
+      fetch:
+        src: "config"
+        dest: "../../kubeconfig"

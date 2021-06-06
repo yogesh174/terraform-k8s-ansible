@@ -1,0 +1,10 @@
+- hosts: aws-k8s-master
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: "Drain the node"
+      shell: "kubectl drain {{ node }} --delete-local-data --force --ignore-daemonsets"
+
+    - name: "Delete the node"
+      shell: "kubectl delete node {{ node }}"

@@ -1,0 +1,10 @@
+  - hosts: gcp-k8s-nodes
+    tasks:
+
+      - name: "Get the env var"
+        shell: "echo $IS_CONFIGURED"
+        register: configured
+
+  - name: "Include require-config play"
+    import_playbook: "require-config.yaml"
+    when: configured.stdout | default(0) != '1'

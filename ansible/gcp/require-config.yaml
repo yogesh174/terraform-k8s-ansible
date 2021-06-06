@@ -1,0 +1,88 @@
+- hosts: aws-k8s-master
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: "Create token command for worker nodes"
+      shell: "kubeadm token create  --print-join-command"
+      register: join_cmd
+      args:
+        warn: false
+
+- hosts: gcp-k8s-nodes
+  become: yes
+  vars:
+
+  tasks:
+
+    - name: "Install necessary software"
+      apt:
+        name: ['apt-transport-https', 'ca-certificates', 'gnupg2', 'software-properties-common']
+        state: "present"
+
+    - name: "Add docker apt-key"
+      apt_key:
+        url: "https://download.docker.com/linux/debian/gpg"
+        state: "present"
+    
+
+    - name: "Add k8s apt-key"
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: "Add docker repo"
+      apt_repository:
+        repo: "deb https://download.docker.com/linux/debian stretch stable"
+        state: "present"
+        filename: "docker"
+
+    - name: "Add k8s repository"
+      apt_repository:
+        repo: "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+        state: "present"
+        filename: "kubernetes"
+
+    - name: "Install Docker"
+      apt:
+        name: "docker-ce"
+        state: "present"
+        update_cache: true
+
+    - name: "Copy docker daemon file"
+      copy:
+        src: "../daemon.json"
+        dest: "/etc/docker/"
+
+    - name: "Enable and start services"
+      service:
+        name: "docker"
+        state: "restarted"
+
+    - name: "Install kubelet"
+      apt:
+        name: "kubelet"
+        state: "present"
+
+    - name: "Install kubeadm"
+      apt:
+        name: "kubeadm"
+        state: "present"
+
+    - name: "Join with master"
+      shell: "{{ hostvars[groups['aws-k8s-master'][0]]['join_cmd']['stdout'] }}"
+      ignore_errors: yes
+
+    - name: "Create terraform env file"
+      file:
+        path: "/etc/profile.d/terraform.sh"
+        state: touch
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: "Add IS_CONFIGURED env var"
+      lineinfile:
+        path: "/etc/profile.d/terraform.sh"
+        insertafter: 'EOF'
+        line: "export IS_CONFIGURED=1"
