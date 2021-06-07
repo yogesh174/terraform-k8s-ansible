@@ -31,10 +31,6 @@
         policy: "targeted"
         state: "permissive"
 
-    # - name: "Disable SELinux on next reboot"
-    #   selinux:
-    #     state: "disabled"
-
     - name: "Copy k8s repo"
       copy:
         src: "kubernetes.repo"
