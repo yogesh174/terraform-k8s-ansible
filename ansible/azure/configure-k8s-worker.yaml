@@ -1,8 +1,18 @@
+- name: "Wait till nodes are reachable"
+  hosts: azure-k8s-nodes
+  gather_facts: no
+  tasks:
+    - name: "Wait for system to become reachable"
+      wait_for_connection:
+
 - hosts: azure-k8s-nodes
+  gather_facts: no
   tasks:
 
     - name: "Get the env var"
-      shell: "echo $IS_CONFIGURED"
+      shell: "source /etc/profile.d/terraform.sh; echo $IS_CONFIGURED"
+      args:
+        executable: /bin/bash
       register: configured
 
 - name: "Include require-config play"

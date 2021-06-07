@@ -11,19 +11,19 @@ resource "null_resource" "configure_aws_k8s_master" {
 }
 
 resource "null_resource" "configure_aws_k8s_worker" {
-  depends_on = [null_resource.configure_aws_k8s_master, aws_instance.k8s_worker, ansible_host.aws_k8s_node]
+  depends_on = [null_resource.configure_aws_k8s_master, aws_instance.k8s_worker, ansible_group.aws_k8s_nodes] # , ansible_host.aws_k8s_node
 
   triggers = {
     cluster_instance_ids = join(", ", aws_instance.k8s_worker.*.id)
   }
 
   provisioner "local-exec" {
-    command = "ansible-playbook ansible/aws/configure-k8s-worker.yaml -i terraform.py"
+    command = "ansible-playbook ansible/aws/configure-k8s-worker.yaml -i ansible-inventory"
   }
 }
 
 resource "null_resource" "configure_gcp_k8s_worker" {
-  depends_on = [null_resource.configure_aws_k8s_master, google_compute_instance.k8s_worker, ansible_host.gcp_k8s_node]
+  depends_on = [null_resource.configure_aws_k8s_master, google_compute_instance.k8s_worker, ansible_group.gcp_k8s_nodes]
 
   triggers = {
     cluster_instance_ids = join(", ", google_compute_instance.k8s_worker.*.id)
@@ -35,7 +35,7 @@ resource "null_resource" "configure_gcp_k8s_worker" {
 }
 
 resource "null_resource" "configure_azure_k8s_worker" {
-  depends_on = [null_resource.configure_aws_k8s_master, azurerm_linux_virtual_machine.k8s_worker, ansible_host.azure_k8s_node]
+  depends_on = [null_resource.configure_aws_k8s_master, azurerm_linux_virtual_machine.k8s_worker, ansible_group.azure_k8s_nodes]
 
   triggers = {
     cluster_instance_ids = join(", ", azurerm_linux_virtual_machine.k8s_worker.*.id)

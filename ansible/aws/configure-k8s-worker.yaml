@@ -1,3 +1,10 @@
+- name: "Wait till nodes are reachable"
+  hosts: aws-k8s-nodes
+  gather_facts: no
+  tasks:
+    - name: "Wait for system to become reachable"
+      wait_for_connection:
+
 - hosts: aws-k8s-nodes
   tasks:
 

@@ -77,7 +77,7 @@ variable "azure_rg_name" {
 
 variable "azure_rg_location" {
   type = string
-  default = "South India"
+  default = "West Europe"
 }
 
 variable "azure_vn_name" {
